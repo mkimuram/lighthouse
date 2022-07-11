@@ -61,6 +61,9 @@ const (
 	globalIP1        = "242.254.1.1"
 	globalIP2        = "242.254.1.2"
 	globalIP3        = "242.254.1.3"
+	epIP1            = "192.168.5.1"
+	epIP2            = "192.168.5.2"
+	epIP3            = "10.253.6.1"
 )
 
 var (
@@ -177,7 +180,7 @@ func newTestDiver() *testDriver {
 			{
 				Addresses: []corev1.EndpointAddress{
 					{
-						IP:       "192.168.5.1",
+						IP:       epIP1,
 						Hostname: hostName,
 						TargetRef: &corev1.ObjectReference{
 							Kind: "Pod",
@@ -185,7 +188,7 @@ func newTestDiver() *testDriver {
 						},
 					},
 					{
-						IP:       "192.168.5.2",
+						IP:       epIP2,
 						NodeName: &nodeName,
 						TargetRef: &corev1.ObjectReference{
 							Kind: "Pod",
@@ -195,7 +198,7 @@ func newTestDiver() *testDriver {
 				},
 				NotReadyAddresses: []corev1.EndpointAddress{
 					{
-						IP: "10.253.6.1",
+						IP: epIP3,
 						TargetRef: &corev1.ObjectReference{
 							Kind: "Pod",
 							Name: "not-ready",
@@ -247,6 +250,16 @@ func (t *testDriver) newHeadlessGlobalIngressIP(name, ip string) *unstructured.U
 	ingressIP := t.newGlobalIngressIP("pod"+"-"+name, ip)
 	Expect(unstructured.SetNestedField(ingressIP.Object, controller.HeadlessServicePod, "spec", "target")).To(Succeed())
 	Expect(unstructured.SetNestedField(ingressIP.Object, name, "spec", "podRef", "name")).To(Succeed())
+
+	return ingressIP
+}
+
+func (t *testDriver) newHeadlessGlobalIngressIPForHeadlessServiceWithoutSelector(name, ip, endpointIP string) *unstructured.Unstructured {
+	ingressIP := t.newGlobalIngressIP("ep"+"-"+name+"-"+endpointIP, ip)
+	Expect(unstructured.SetNestedField(ingressIP.Object, controller.HeadlessServiceEndpoints, "spec", "target")).To(Succeed())
+	Expect(unstructured.SetNestedField(ingressIP.Object, name, "spec", "serviceRef", "name")).To(Succeed())
+	annotations := map[string]string{"submariner.io/headless-svc-endpoints-ip": endpointIP}
+	Expect(unstructured.SetNestedStringMap(ingressIP.Object, annotations, "metadata", "annotations")).To(Succeed())
 
 	return ingressIP
 }
@@ -505,6 +518,21 @@ func (t *testDriver) awaitEndpointSlice() {
 	t.cluster2.awaitEndpointSlice(t)
 }
 
+func (t *testDriver) awaitEndpointSliceForServiceWithoutSelector() {
+	// TODO: fix me
+	/*
+		obj := test.AwaitResource(t.brokerEndpointSliceClient, t.endpoints.Name+"-"+clusterID1)
+
+		endpointSlice := &discovery.EndpointSlice{}
+		Expect(scheme.Scheme.Convert(obj, endpointSlice, nil)).To(Succeed())
+		Expect(endpointSlice.Namespace).To(Equal(test.RemoteNamespace))
+	*/
+
+	//t.awaitBrokerEndpointSlice()
+	//t.cluster1.awaitEndpointSlice(t)
+	//t.cluster2.awaitEndpointSlice(t)
+}
+
 func (t *testDriver) awaitUpdatedEndpointSlice(expectedIPs []string) {
 	awaitUpdatedEndpointSlice(t.brokerEndpointSliceClient, t.endpoints, expectedIPs)
 	t.cluster1.awaitUpdatedEndpointSlice(t.endpoints, expectedIPs)
@@ -561,6 +589,13 @@ func (t *testDriver) createEndpointIngressIPs() {
 	t.createGlobalIngressIP(t.newHeadlessGlobalIngressIP("one", globalIP1))
 	t.createGlobalIngressIP(t.newHeadlessGlobalIngressIP("two", globalIP2))
 	t.createGlobalIngressIP(t.newHeadlessGlobalIngressIP("not-ready", globalIP3))
+}
+
+func (t *testDriver) createEndpointIngressIPsForHeadlessServiceWithoutSelector() {
+	t.endpointGlobalIPs = []string{globalIP1, globalIP2, globalIP3}
+	t.createGlobalIngressIP(t.newHeadlessGlobalIngressIPForHeadlessServiceWithoutSelector("one", globalIP1, epIP1))
+	t.createGlobalIngressIP(t.newHeadlessGlobalIngressIPForHeadlessServiceWithoutSelector("two", globalIP2, epIP2))
+	t.createGlobalIngressIP(t.newHeadlessGlobalIngressIPForHeadlessServiceWithoutSelector("not-ready", globalIP3, epIP3))
 }
 
 func (t *testDriver) awaitNoServiceImport(client dynamic.ResourceInterface) {

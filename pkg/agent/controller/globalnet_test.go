@@ -147,4 +147,44 @@ var _ = Describe("Globalnet enabled", func() {
 			})
 		})
 	})
+
+	When("a headless Service without selector is exported", func() {
+		BeforeEach(func() {
+			t.service.Spec.ClusterIP = corev1.ClusterIPNone
+			// subsets[*].adresses[*].TargetRef = nil for all Endpoints of headless Service without selector
+			for _, subset := range t.endpoints.Subsets {
+				for _, address := range subset.Addresses {
+					address.TargetRef = nil
+				}
+			}
+		})
+
+		JustBeforeEach(func() {
+			t.createEndpoints()
+		})
+
+		Context("and it has a global IP for all endpoint addresses", func() {
+			BeforeEach(func() {
+				t.createEndpointIngressIPsForHeadlessServiceWithoutSelector()
+			})
+
+			It("should sync a ServiceImport and EndpointSlice with the global IPs", func() {
+				t.awaitHeadlessServiceImport()
+				t.awaitEndpointSliceForServiceWithoutSelector()
+			})
+		})
+
+		Context("and it initially does not have a global IP for all endpoint addresses", func() {
+			It("should eventually sync a ServiceImport and EndpointSlice with the global IPs", func() {
+				time.Sleep(time.Millisecond * 300)
+				t.awaitNoEndpointSlice(t.cluster1.localEndpointSliceClient)
+
+				t.createEndpointIngressIPs()
+
+				t.awaitHeadlessServiceImport()
+				t.awaitEndpointSlice()
+			})
+		})
+	})
+
 })
